@@ -1,0 +1,73 @@
+#!/bin/sh
+
+# Static configuration (defaults)
+PROTOCOL="https"           # Protocol to use for the API
+ENDPOINT="api.upcloud.com" # API endpoint to use
+VERSION="1.2"              # API version to use
+API_RESOURCES="server"     # Space separated known API objects (to filter what is our data and what is the API data)
+DEBUG=1
+
+# Internal variables - do not modify for configuration, no modification should be required.
+valid_keys="$(echo $API_RESOURCES | sed 's/ /\\|/g;')"
+stdin=""
+
+# Functions
+API_Call() {
+	case "$1" in
+		"server")
+			curl -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 | jq -c ".servers.server[]" | while read server; do
+				hostname="$(echo "$2" | jq ".hostname")"
+				[ "$(echo "$server" | jq ".hostname")" = "$hostname" ] && echo "Server $hostname is already existing. Skipping." >&2 && exit 1 # We're in a subshell, let's exit
+			done && echo "{\"$1\": $2}" | curl -X POST -d@- --header "Content-Type:application/json" -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 || true
+			;;
+		*)
+			echo "$1 resource isn't implemented yet." >&2
+			;;
+	esac
+}
+
+usage() {
+	cat >&2 <<-USAGE
+	$0 [options]
+	Provisions a configuration passed to stdin in upcloud.
+
+	  -q Quiet mode
+	  -h this help
+
+	USAGE
+	exit $1
+}
+
+dbg() {
+	[ $DEBUG -eq 1 ] && echo $@ >&2
+}
+
+# Script's main entry point
+## Parse flags and set runtime configuration
+while true; do
+	case $1 in
+	"-q")   DEBUG=0;;
+	"-h")   usage 0;;
+	"--")   break;;
+	"-"*)   usage 2;;
+	*|"")   break;; # Stop processing when non-flag is reached.
+	esac
+	shift
+done
+
+## Ensure that we can call the API
+[ $(curl -SsL -o /dev/null -w "%{http_code}" $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/account) -ne 200 ] && echo "User $UPCLOUD_AUTOMATION_USER isn't allowed to call the API. Aborting." >&2 && exit 1
+
+## Read the resources
+dbg "Reading from stdin..."
+while read line; do
+	stdin="$stdin$line"
+done
+dbg "stdin closed"
+
+## Parse the resources
+echo $stdin | jq -c '.[]' | while read resource; do
+	resource_type=$(echo "$resource" | jq -c 'keys' | sed 's/^\[//; s/\]$//; s/"//g; s/,/\n/g;' | sed '/^\('$valid_keys'\)$/!d')
+	[ $(echo $resource_type | wc -l) -gt 1 ] && echo "Too many resource types in $resource" >&2 && continue
+	API_Call "$resource_type" "$(echo $resource | jq ".$resource_type")"
+done

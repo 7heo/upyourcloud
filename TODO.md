@@ -1,0 +1,3 @@
+- Implement deletion and replacement
+- Implement flag to replace existing resouces if different
+- Implement more resources than `server`

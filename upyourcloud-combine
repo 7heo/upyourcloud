@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo "["
+for file in $@
+do
+	sed 's/^/  /; $s/$/,/' $file
+done | sed '$s/,$//'
+echo "]"
