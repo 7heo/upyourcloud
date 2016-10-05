@@ -63,6 +63,12 @@ check_for_dependencies() {
 	done
 }
 
+check_for_configuration() {
+	[ -z "$UPCLOUD_AUTOMATION_USER" ] && echo "Please define the variable UPCLOUD_AUTOMATION_USER to a username allowed to use the upcloud API." >&2
+	[ -z "$UPCLOUD_AUTOMATION_PASSWORD" ] && echo "Please define the variable UPCLOUD_AUTOMATION_PASSWORD to the password of the user ${UPCLOUD_AUTOMATION_USER:-defined to access the upcloud API}." >&2
+	[ -z "$UPCLOUD_AUTOMATION_USER" -o -z "$UPCLOUD_AUTOMATION_PASSWORD" ] && exit 1
+}
+
 dbg() { # Expected args: Any number of args to display
 	[ $DEBUG -eq 1 ] && echo $@ >&2
 }
@@ -70,6 +76,7 @@ dbg() { # Expected args: Any number of args to display
 # Script's main entry point
 ## Parse flags and set runtime configuration
 check_for_dependencies
+check_for_configuration
 
 while true; do
 	case $1 in
