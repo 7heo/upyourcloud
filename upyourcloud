@@ -12,7 +12,7 @@ valid_keys="$(echo $API_RESOURCES | sed 's/ /\\|/g;')"
 stdin=""
 
 # Functions
-API_Call() {
+API_Call() { # Expected args: $1 name of resource, $2 json of resource.
 	case "$1" in
 		"server")
 			curl -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 | jq -c ".servers.server[]" | while read server; do
@@ -26,7 +26,7 @@ API_Call() {
 	esac
 }
 
-usage() {
+usage() { # Expected args: $1 exit code to use.
 	cat >&2 <<-USAGE
 	$0 [options]
 	Provisions a configuration passed to stdin in upcloud.
@@ -38,7 +38,7 @@ usage() {
 	exit $1
 }
 
-dbg() {
+dbg() { # Expected args: Any number of args to display
 	[ $DEBUG -eq 1 ] && echo $@ >&2
 }
 
