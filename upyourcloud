@@ -9,6 +9,7 @@ PACKER_STATES="states/roles/" # Relative path (from the execution path) to the l
 DEBUG=1
 
 # Internal variables - do not modify for configuration, no modification should be required.
+dependencies="curl jq sed"
 valid_keys="$(echo $API_RESOURCES | sed 's/ /\\|/g;')"
 stdin=""
 
@@ -56,12 +57,20 @@ usage() { # Expected args: $1 exit code to use.
 	exit $1
 }
 
+check_for_dependencies() {
+	for dependency in $dependencies; do
+		command -v $dependency >/dev/null || { echo "The dependency '$dependency' was not found on this system. Please install it. Aborting."; exit 1; }
+	done
+}
+
 dbg() { # Expected args: Any number of args to display
 	[ $DEBUG -eq 1 ] && echo $@ >&2
 }
 
 # Script's main entry point
 ## Parse flags and set runtime configuration
+check_for_dependencies
+
 while true; do
 	case $1 in
 	"-q")   DEBUG=0;;
