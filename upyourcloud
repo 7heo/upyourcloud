@@ -1,10 +1,11 @@
 #!/bin/sh
 
 # Static configuration (defaults)
-PROTOCOL="https"           # Protocol to use for the API
-ENDPOINT="api.upcloud.com" # API endpoint to use
-VERSION="1.2"              # API version to use
-API_RESOURCES="server"     # Space separated known API objects (to filter what is our data and what is the API data)
+PROTOCOL="https"              # Protocol to use for the API
+ENDPOINT="api.upcloud.com"    # API endpoint to use
+VERSION="1.2"                 # API version to use
+API_RESOURCES="server"        # Space separated known API objects (to filter what is our data and what is the API data)
+PACKER_STATES="states/roles/" # Relative path (from the execution path) to the location of the `packerstate` files.
 DEBUG=1
 
 # Internal variables - do not modify for configuration, no modification should be required.
@@ -12,13 +13,30 @@ valid_keys="$(echo $API_RESOURCES | sed 's/ /\\|/g;')"
 stdin=""
 
 # Functions
+substitute_real_disks() { # Expected args: $1 json of the resource
+	json="$1"
+	real_devices="$(echo "$json" | jq -c '.storage_devices.storage_device[]' | while read line
+		do
+			if [ "$(echo "$line" | jq -c 'keys')" = '["role"]' ]; then
+				role="$(echo "$line" | jq -c '.role' | tr -d '"')"
+				file_to_load="$PACKER_STATES$role.packerstate"
+				storage_id="$(sed '/UUID/!d; s/^.*(UUID: \([0-9a-f-]\+\),.*)$/\1/' "$file_to_load")"
+				echo -n '{"action":"clone", "storage":"'"$storage_id"'", "title":"'"$role-packer-image"'", "tier": "maxiops"},'
+			else
+				echo -n "$line,"
+			fi
+		done | sed 's/,$//'
+	)"
+	echo "$json" | jq ".storage_devices.storage_device=[$real_devices]"
+}
+
 API_Call() { # Expected args: $1 name of resource, $2 json of resource.
 	case "$1" in
 		"server")
 			curl -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 | jq -c ".servers.server[]" | while read server; do
 				hostname="$(echo "$2" | jq ".hostname")"
 				[ "$(echo "$server" | jq ".hostname")" = "$hostname" ] && echo "Server $hostname is already existing. Skipping." >&2 && exit 1 # We're in a subshell, let's exit
-			done && echo "{\"$1\": $2}" | curl -X POST -d@- --header "Content-Type:application/json" -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 || true
+			done && echo "{\"$1\": $(substitute_real_disks "$2")}" | curl -X POST -d@- --header "Content-Type:application/json" -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 || true
 			;;
 		*)
 			echo "$1 resource isn't implemented yet." >&2
