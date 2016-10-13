@@ -37,6 +37,7 @@ API_Call() { # Expected args: $1 name of resource, $2 json of resource.
 			curl -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 | jq -c ".servers.server[]" | while read server; do
 				hostname="$(echo "$2" | jq ".hostname")"
 				[ "$(echo "$server" | jq ".hostname")" = "$hostname" ] && echo "Server $hostname is already existing. Skipping." >&2 && exit 1 # We're in a subshell, let's exit
+				true
 			done && echo "{\"$1\": $(substitute_real_disks "$2")}" | curl -X POST -d@- --header "Content-Type:application/json" -SsL $PROTOCOL://$UPCLOUD_AUTOMATION_USER:$UPCLOUD_AUTOMATION_PASSWORD@$ENDPOINT/$VERSION/$1 || true
 			;;
 		*)
